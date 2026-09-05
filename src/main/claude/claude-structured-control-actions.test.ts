@@ -128,11 +128,14 @@ describe('stopClaudeBackgroundTasks', () => {
         { task_id: 'task-bash', task_type: 'local_bash', description: 'bash' }
       ]
     })
-    const stopTask = vi.fn(async (_taskId: string) => {})
+    const stopTask = vi.fn(async (_taskId: string, _options?: { timeoutMs?: number }) => {})
     const session = { backgroundTasks, connection: { stopTask } } as unknown as ClaudeSession
 
-    await expect(stopClaudeBackgroundTasks(session)).resolves.toEqual({ cancelled: true })
-    expect(stopTask.mock.calls.map(([taskId]) => taskId)).toEqual(['task-agent', 'task-bash'])
+    await expect(stopClaudeBackgroundTasks(session, 5_000)).resolves.toEqual({ cancelled: true })
+    expect(stopTask.mock.calls).toEqual([
+      ['task-agent', { timeoutMs: 5_000 }],
+      ['task-bash', { timeoutMs: 5_000 }]
+    ])
   })
 
   it('stops issuing requests when ownership changes between tasks', async () => {
@@ -152,7 +155,7 @@ describe('stopClaudeBackgroundTasks', () => {
     })
     const session = { backgroundTasks, connection: { stopTask } } as unknown as ClaudeSession
 
-    await stopClaudeBackgroundTasks(session, () => current)
+    await stopClaudeBackgroundTasks(session, undefined, () => current)
     expect(stopTask).toHaveBeenCalledTimes(1)
   })
 })

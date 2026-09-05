@@ -45,6 +45,7 @@ export async function cancelClaudeTurn(
 
 export async function stopClaudeBackgroundTasks(
   session: ClaudeSession,
+  timeoutMs: number | undefined,
   isCurrent: ClaudeTurnCancellationGuard = () => true
 ): Promise<{ cancelled: boolean }> {
   const taskIds = session.backgroundTasks.stoppableTaskIds
@@ -54,7 +55,7 @@ export async function stopClaudeBackgroundTasks(
       break
     }
     try {
-      await session.connection.stopTask(taskId)
+      await session.connection.stopTask(taskId, { timeoutMs })
       cancelled = true
     } catch (error) {
       if (!(error instanceof ClaudeControlRequestError)) {

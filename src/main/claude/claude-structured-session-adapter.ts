@@ -207,7 +207,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   stopBackgroundTasks: StructuredAgentSessionAdapter['stopBackgroundTasks'] = (input) => {
     const session = this.session(input.sessionId)
     const acquisitionGeneration = session.acquisitionGeneration
-    return stopClaudeBackgroundTasks(session, () =>
+    return stopClaudeBackgroundTasks(session, this.deps.requestTimeoutMs, () =>
       Boolean(
         this.sessions.get(input.sessionId) === session &&
         session.fence === input.fence &&
