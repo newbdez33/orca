@@ -114,7 +114,7 @@ describe('AgentSessionSubscribers', () => {
     })
   })
 
-  it('publishes background lifecycle without advancing or serializing the journal', async () => {
+  it('publishes background lifecycle without advancing the journal and carries its fence forward', async () => {
     const journal = await journals.open({
       identity: {
         sessionId: SESSION,
@@ -137,16 +137,25 @@ describe('AgentSessionSubscribers', () => {
     })
     const cursor = journal.cursor()
 
-    subscribers.backgroundTasks(SESSION, { state: 'monitoring' }, 1)
+    subscribers.backgroundTasks(SESSION, { state: 'monitoring' }, 2)
 
     expect(journal.cursor()).toEqual(cursor)
     expect(events.at(-1)).toEqual({
       type: 'batch',
       sessionId: SESSION,
       batch: { cursor, items: [], removedItemIds: [], submissions: [] },
-      fence: 1,
+      fence: 2,
       backgroundTasks: { state: 'monitoring' }
     })
+
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: 'after-background-fence' },
+      { kind: 'status', text: 'After background state' },
+      { fence: 2 }
+    )
+    subscribers.publish(SESSION, journal)
+
+    expect(events.at(-1)).toMatchObject({ type: 'batch', fence: 2 })
   })
 
   it('catches a subscriber up past a pre-existing unsendable removal with a bounded reset', async () => {

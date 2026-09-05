@@ -181,6 +181,7 @@ export class AgentSessionSubscribers {
         fence,
         backgroundTasks: state
       })
+      subscriber.fence = fence
     }
   }
 

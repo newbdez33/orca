@@ -311,4 +311,28 @@ describe('structured agent session reducer', () => {
 
     expect(duplicate).toBe(monitoring)
   })
+
+  it('clears additive background state when a replacement snapshot omits the field', () => {
+    const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('message', 1)]),
+        backgroundTasks: { state: 'monitoring' }
+      }
+    })
+    const withoutCapability = reduceStructuredAgentSession(monitoring, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 2,
+        page: hydrationPage([item('message', 1)])
+      }
+    })
+
+    expect(withoutCapability.backgroundTasks).toBeUndefined()
+  })
 })

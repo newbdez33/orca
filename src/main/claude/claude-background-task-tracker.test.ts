@@ -118,6 +118,18 @@ describe('ClaudeBackgroundTaskTracker', () => {
     expect(tracker.state).toBeNull()
   })
 
+  it('lets an authoritative aggregate roster replace earlier terminal-edge evidence', () => {
+    const tracker = new ClaudeBackgroundTaskTracker()
+    tracker.observe(system('task_notification', { task_id: 'task-live', status: 'completed' }))
+
+    tracker.observe(
+      aggregate([{ task_id: 'task-live', task_type: 'local_agent', description: 'agent' }])
+    )
+
+    expect(tracker.stoppableTaskIds).toEqual(['task-live'])
+    expect(tracker.state).toEqual({ state: 'monitoring' })
+  })
+
   it('keeps terminal edges authoritative on either side of aggregate replacement', () => {
     const terminalFirst = new ClaudeBackgroundTaskTracker()
     terminalFirst.observe(
