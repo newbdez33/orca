@@ -114,6 +114,41 @@ describe('AgentSessionSubscribers', () => {
     })
   })
 
+  it('publishes background lifecycle without advancing or serializing the journal', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'claude',
+        providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: null }
+      },
+      journalDir: join(root, 'background-journal')
+    })
+    const subscribers = new AgentSessionSubscribers()
+    const events: AgentSessionSubscribeEvent[] = []
+    subscribers.open({
+      id: 'subscriber-1',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      backgroundTasks: null,
+      emit: (event) => events.push(event)
+    })
+    const cursor = journal.cursor()
+
+    subscribers.backgroundTasks(SESSION, { state: 'monitoring' }, 1)
+
+    expect(journal.cursor()).toEqual(cursor)
+    expect(events.at(-1)).toEqual({
+      type: 'batch',
+      sessionId: SESSION,
+      batch: { cursor, items: [], removedItemIds: [], submissions: [] },
+      fence: 1,
+      backgroundTasks: { state: 'monitoring' }
+    })
+  })
+
   it('catches a subscriber up past a pre-existing unsendable removal with a bounded reset', async () => {
     const journalDir = join(root, 'oversized-removal-journal')
     const seeded = await journals.open({

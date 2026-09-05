@@ -17,13 +17,18 @@ const mocks = vi.hoisted(() => ({
     showTurnStatus?: boolean
     runtimeContext?: unknown
   },
-  composerProps: null as null | { structuredTransport?: Record<string, unknown> },
+  composerProps: null as null | {
+    structuredTransport?: Record<string, unknown>
+    isWorking?: boolean
+  },
   questionCardProps: null as NativeChatQuestionCardProps | null,
   promptItems: [] as AgentJournalRenderItem[],
   respond: vi.fn(),
   handlePasteEvent: vi.fn(),
   pasteFromClipboard: vi.fn(),
-  submissions: [] as unknown[]
+  submissions: [] as unknown[],
+  monitoringBackgroundTasks: false,
+  stopBackgroundTasks: vi.fn()
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -67,8 +72,10 @@ vi.mock('./use-structured-agent-session', async () => {
         send: outbox.send,
         retry: outbox.retry,
         isWorking: false,
+        isMonitoringBackgroundTasks: mocks.monitoringBackgroundTasks,
         turnId: null,
         cancel: vi.fn(),
+        stopBackgroundTasks: mocks.stopBackgroundTasks,
         respond: mocks.respond,
         optionSnapshot: [
           {
@@ -155,6 +162,8 @@ describe('NativeChatStructuredSession', () => {
     mocks.handlePasteEvent.mockReset()
     mocks.pasteFromClipboard.mockReset()
     mocks.submissions = []
+    mocks.monitoringBackgroundTasks = false
+    mocks.stopBackgroundTasks.mockReset()
   })
 
   it('routes app-menu paste into the structured composer', () => {
@@ -212,6 +221,35 @@ describe('NativeChatStructuredSession', () => {
       expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
     }
   )
+
+  it('places background monitoring above the usable composer and stops without an active turn', async () => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.stopBackgroundTasks.mockResolvedValue({ cancelled: true })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-background"
+        sessionId="session-background"
+        target={{ kind: 'local' }}
+        agent="claude"
+        allowFileUriLinks={false}
+      />
+    )
+
+    const status = screen
+      .getByText('Monitoring background tasks')
+      .closest('[data-native-chat-background-tasks="true"]')
+    const composer = screen.getByTestId('structured-composer')
+    if (!status) {
+      throw new Error('background task status was not rendered')
+    }
+    expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(mocks.composerProps?.isWorking).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    await waitFor(() => expect(mocks.stopBackgroundTasks).toHaveBeenCalledOnce())
+  })
 
   it('routes a bare model command to the native option picker', async () => {
     render(

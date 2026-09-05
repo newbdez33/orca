@@ -76,6 +76,7 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   /** What the ladder has observed so far; read after a `close()` that returned false. */
   readonly exitVerdict: ClaudeChildExitVerdict
   send: (message: Record<string, unknown>) => Promise<void>
+  stopTask: (taskId: string) => Promise<void>
   /** Resolves true after processless settlement, or root exit plus observed tree exit. */
   close: () => Promise<boolean>
 }
@@ -278,6 +279,7 @@ export async function openClaudeStreamJsonConnection(
       } as const
     },
     send,
+    stopTask: (taskId) => session.stopTask(taskId),
     close
   }
 }

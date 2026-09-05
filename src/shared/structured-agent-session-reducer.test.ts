@@ -250,4 +250,65 @@ describe('structured agent session reducer', () => {
     expect(state.submissions[0]?.clientMessageId).toBe('client-44')
     expect(state.submissions.at(-1)?.clientMessageId).toBe('client-299')
   })
+
+  it('projects additive background task state without changing transcript identity', () => {
+    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('message', 1)]),
+        backgroundTasks: null
+      }
+    })
+    const monitoring = reduceStructuredAgentSession(initial, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: initial.cursor!,
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        fence: 1,
+        backgroundTasks: { state: 'monitoring' }
+      }
+    })
+
+    expect(monitoring.backgroundTasks).toEqual({ state: 'monitoring' })
+    expect(monitoring.items).toBe(initial.items)
+  })
+
+  it('returns the same state for duplicate background task publications', () => {
+    const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('message', 1)]),
+        backgroundTasks: { state: 'monitoring' }
+      }
+    })
+    const duplicate = reduceStructuredAgentSession(monitoring, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: monitoring.cursor!,
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        fence: 1,
+        backgroundTasks: { state: 'monitoring' }
+      }
+    })
+
+    expect(duplicate).toBe(monitoring)
+  })
 })

@@ -4,6 +4,7 @@ import type {
   AgentJournalSubmission
 } from './agent-session-journal-types'
 import type {
+  AgentSessionBackgroundTaskState,
   AgentSessionHandoffStatus,
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent
@@ -19,6 +20,7 @@ export type StructuredAgentSessionState = {
   status: 'idle' | 'loading' | 'ready' | 'error'
   error?: string
   handoff: AgentSessionHandoffStatus | null
+  backgroundTasks?: AgentSessionBackgroundTaskState | null
 }
 
 export type StructuredAgentSessionAction =
@@ -45,7 +47,8 @@ const MAX_RETAINED_SUBMISSIONS = 256
 function replacePage(
   page: AgentSessionHistoryPage,
   fence: number,
-  handoff?: AgentSessionHandoffStatus
+  handoff?: AgentSessionHandoffStatus,
+  backgroundTasks?: AgentSessionBackgroundTaskState | null
 ): StructuredAgentSessionState {
   return {
     epoch: page.epoch,
@@ -55,7 +58,12 @@ function replacePage(
     submissions: page.submissions,
     hasOlder: page.hasOlder,
     status: 'ready',
-    handoff: handoff ?? null
+    handoff: handoff ?? null,
+    ...(backgroundTasks !== undefined
+      ? { backgroundTasks }
+      : page.backgroundTasks !== undefined
+        ? { backgroundTasks: page.backgroundTasks }
+        : {})
   }
 }
 
@@ -113,12 +121,23 @@ export function reduceStructuredAgentSession(
       state.cursor &&
       (!pageCursor || pageCursor.sequence <= state.cursor.sequence)
     ) {
+      const backgroundTasksChanged =
+        action.page.backgroundTasks !== undefined &&
+        action.page.backgroundTasks?.state !== state.backgroundTasks?.state
       if (
         pageCursor?.sequence === state.cursor.sequence &&
-        action.page.fence !== undefined &&
-        action.page.fence !== state.fence
+        ((action.page.fence !== undefined && action.page.fence !== state.fence) ||
+          backgroundTasksChanged)
       ) {
-        return { ...state, fence: action.page.fence, status: 'ready', error: undefined }
+        return {
+          ...state,
+          ...(action.page.fence !== undefined ? { fence: action.page.fence } : {}),
+          ...(action.page.backgroundTasks !== undefined
+            ? { backgroundTasks: action.page.backgroundTasks }
+            : {}),
+          status: 'ready',
+          error: undefined
+        }
       }
       return state
     }
@@ -133,7 +152,12 @@ export function reduceStructuredAgentSession(
         : action.page.submissions,
       hasOlder: action.page.hasOlder,
       status: 'ready',
-      handoff: state.handoff
+      handoff: state.handoff,
+      ...(action.page.backgroundTasks !== undefined
+        ? { backgroundTasks: action.page.backgroundTasks }
+        : state.backgroundTasks !== undefined
+          ? { backgroundTasks: state.backgroundTasks }
+          : {})
     }
   }
   if (action.type === 'older-page') {
@@ -152,7 +176,7 @@ export function reduceStructuredAgentSession(
     return state
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
-    return replacePage(event.page, event.fence, event.handoff)
+    return replacePage(event.page, event.fence, event.handoff, event.backgroundTasks)
   }
   if (state.epoch !== event.batch.cursor.epoch) {
     return state
@@ -160,15 +184,37 @@ export function reduceStructuredAgentSession(
   if (state.cursor && event.batch.cursor.sequence < state.cursor.sequence) {
     return state
   }
+  const backgroundTasks =
+    event.backgroundTasks !== undefined ? event.backgroundTasks : state.backgroundTasks
+  const journalUnchanged =
+    event.batch.items.length === 0 &&
+    event.batch.removedItemIds.length === 0 &&
+    event.batch.submissions.length === 0
+  if (
+    event.batch.cursor.sequence === state.cursor?.sequence &&
+    journalUnchanged &&
+    (event.fence === undefined || event.fence === state.fence) &&
+    (event.handoff === undefined || event.handoff === state.handoff) &&
+    backgroundTasks?.state === state.backgroundTasks?.state &&
+    state.status === 'ready' &&
+    state.error === undefined
+  ) {
+    return state
+  }
   return {
     ...state,
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
-    items: mergeItems(state.items, event.batch.items, event.batch.removedItemIds),
-    submissions: mergeSubmissions(state.submissions, event.batch.submissions),
+    items: journalUnchanged
+      ? state.items
+      : mergeItems(state.items, event.batch.items, event.batch.removedItemIds),
+    submissions: journalUnchanged
+      ? state.submissions
+      : mergeSubmissions(state.submissions, event.batch.submissions),
     status: 'ready',
     error: undefined,
-    handoff: event.handoff ?? state.handoff
+    handoff: event.handoff ?? state.handoff,
+    ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
   }
 }
 

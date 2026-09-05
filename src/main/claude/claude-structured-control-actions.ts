@@ -43,6 +43,28 @@ export async function cancelClaudeTurn(
   }
 }
 
+export async function stopClaudeBackgroundTasks(
+  session: ClaudeSession,
+  isCurrent: ClaudeTurnCancellationGuard = () => true
+): Promise<{ cancelled: boolean }> {
+  const taskIds = session.backgroundTasks.stoppableTaskIds
+  let cancelled = false
+  for (const taskId of taskIds) {
+    if (!isCurrent()) {
+      break
+    }
+    try {
+      await session.connection.stopTask(taskId)
+      cancelled = true
+    } catch (error) {
+      if (!(error instanceof ClaudeControlRequestError)) {
+        throw error
+      }
+    }
+  }
+  return { cancelled }
+}
+
 export async function answerClaudePrompt(
   session: ClaudeSession,
   input: { itemId: string; kind: 'approval' | 'question'; optionId: string }

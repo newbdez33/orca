@@ -16971,6 +16971,10 @@
         "workedFor": "Worked for {{value0}}",
         "toggleDetails": "Toggle turn details"
       },
+      "backgroundTasks": {
+        "monitoring": "Monitoring background tasks",
+        "stop": "Stop"
+      },
       "jumpToLatest": "Jump to latest",
       "toggle": {
         "showTerminal": "Show terminal",
