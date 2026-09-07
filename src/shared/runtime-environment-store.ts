@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
 import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { parsePairingCode, type PairingOffer } from './pairing'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
 import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
-import { hardenExistingSecureFile } from './secure-file'
+import { bestEffortFsyncDirectorySync, hardenExistingSecureFile } from './secure-file'
 import {
   createEnvironmentFromPairingOffer,
   getPreferredPairingOffer,
@@ -233,13 +233,22 @@ function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
   }
   try {
     hardenExistingSecureFile(path)
-    const parsed = RuntimeEnvironmentStoreSchema.parse(
-      JSON.parse(
-        readNodeFileSyncWithinLimit(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES).buffer.toString(
-          'utf8'
-        )
-      )
-    )
+    const raw = readNodeFileSyncWithinLimit(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES).buffer
+    let value: unknown
+    try {
+      value = JSON.parse(raw.toString('utf8'))
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) {
+        throw error
+      }
+      // Keep the original bytes and permissions before allowing another save.
+      const backupPath = `${path}.corrupt.${Date.now()}.${randomUUID()}.bak`
+      renameSync(path, backupPath)
+      bestEffortFsyncDirectorySync(userDataPath)
+      console.warn(`[runtime-environments] Moved an unreadable JSON store to ${backupPath}`)
+      return { version: 1, environments: [] }
+    }
+    const parsed = RuntimeEnvironmentStoreSchema.parse(value)
     return {
       version: 1,
       environments: parsed.environments
@@ -260,7 +269,8 @@ function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentSt
     writeSecureJsonFileWithinLimit(
       path,
       RuntimeEnvironmentStoreSchema.parse(store),
-      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
+      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
+      { durable: true }
     )
   } catch (error) {
     if (error instanceof JsonStringifyByteLimitError) {
