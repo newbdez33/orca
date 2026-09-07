@@ -33,6 +33,14 @@ const cases = [
   { name: 'empty', contents: Buffer.alloc(0) },
   { name: 'truncated', contents: Buffer.from('{"version":1,"environments":[') }
 ]
+const fixtureIndex = process.argv.indexOf('--fixture')
+if (fixtureIndex !== -1) {
+  const fixturePath = process.argv[fixtureIndex + 1]
+  if (!fixturePath) {
+    throw new Error('--fixture requires a path to a corrupt store')
+  }
+  cases.push({ name: 'captured', contents: readFileSync(fixturePath) })
+}
 const results: Record<string, unknown>[] = []
 
 for (const entry of cases) {

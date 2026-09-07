@@ -21,6 +21,10 @@ and writes a valid store that can be read again. It also checks an existing vali
 store. The JSON report contains backup paths, lengths, and SHA-256 hashes. Keep
 the temporary directories named in the report as evidence.
 
+To verify bytes captured after a real power loss, pass `--fixture /path/to/store`.
+The probe copies those bytes into a new temporary profile and verifies an exact
+backup and successful save. It does not change the captured file.
+
 For a bundle built with the store implementation before recovery was added, pass
 `--expect-blocked`. The probe then requires all three corrupt inputs to block
 saving and remain unchanged. A successful control run confirms the original
@@ -33,3 +37,6 @@ file inspection after each forced power-off, before recovery can change the
 evidence. Report completed trial counts and damaged, missing, and intact files
 for both writer versions. A run with no corruption in either version does not
 reproduce the original durability failure.
+
+See [the Hyper-V probe](runtime-environment-power-loss.md) for an automated
+comparison that records completed writes on the host and retains raw results.
